@@ -1186,3 +1186,24 @@
       hf.value = JSON.stringify(buildOrderJson(), null, 2);
     }, true);
   })();
+
+/* ============================================================================
+ * SECTION 4 — Phone input masks (XXX-XXX-XXXX)
+ * Applies a consistent US phone format to all phone inputs on the page.
+ * Requires the IMask library (loaded via CDN in Page Footer Code).
+ * Targets the customer phone (Step 0) and the delivery contact phone (Step 1).
+ * ============================================================================
+ */
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof IMask === 'undefined') {
+    console.warn('Catering: IMask library not loaded — skipping phone mask init.');
+    return;
+  }
+  // Targets: any <input type="tel"> or any input whose name contains "Phone"
+  var phoneInputs = document.querySelectorAll('input[type="tel"], input[name*="Phone"]');
+  phoneInputs.forEach(function (el) {
+    IMask(el, {
+      mask: '000-000-0000'
+    });
+  });
+});
