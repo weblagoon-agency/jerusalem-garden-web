@@ -914,9 +914,9 @@
         var building = readSummary('uofmBuilding');
         var uofmStreet = readSummary('uofmStreetAddress');
         // Combine building + street, e.g. "North Quad, 105 S State St"
+        // Short Code intentionally NOT included here — it's shown separately
+        // in the Payment Method block at the bottom of Step 3.
         addressStr = [building, uofmStreet].filter(Boolean).join(', ');
-        var shortCode = readSummary('shortCode');
-        if (shortCode) addressStr += ' (Short Code: ' + shortCode + ')';
       } else if (locationType === 'other') {
         var streetAddress = readSummary('streetAddress');
         var suite = readSummary('suiteAddress');
@@ -1236,6 +1236,18 @@ document.addEventListener('DOMContentLoaded', function () {
   phoneInputs.forEach(function (el) {
     IMask(el, {
       mask: '000-000-0000'
+    });
+  });
+
+  // Short Code mask: digits only, no max length.
+  // Prevents the user from typing letters/symbols even before HTML5 validation.
+  document.querySelectorAll('input[data-summary="shortCode"]').forEach(function (el) {
+    IMask(el, {
+      mask: Number,
+      scale: 0,             // no decimals
+      signed: false,        // no negative sign
+      thousandsSeparator: '', // no thousand separators
+      normalizeZeros: false // keep leading zeros if the user types them
     });
   });
 });
