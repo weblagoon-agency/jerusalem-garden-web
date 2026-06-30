@@ -994,6 +994,35 @@
       renderEventSummary();
       renderOrderItems();
       renderPricing();
+      renderPaymentSummary();
+    }
+    // === Step 3: Payment summary (at the bottom, under Estimated Total) ===
+    // Two targets in DOM:
+    //   [data-summary-target="paymentMethod"]  — method line ("Short Code: ..." | "Credit Card")
+    //                                            its parent <div data-show-when="location-type:uofm">
+    //                                            is auto-hidden for non-UofM customers by the
+    //                                            existing toggle system, so we just fill the text.
+    //   [data-summary-target="paymentNote"]    — reassurance note, varies by chosen method
+    function renderPaymentSummary() {
+      var locType = readSummary('locationType');
+      var paymentMethod = readSummary('paymentMethod');
+      var shortCode = readSummary('shortCode');
+      var methodText = '—';
+      var noteText = '';
+      if (locType === 'uofm') {
+        if (paymentMethod === 'short-code') {
+          methodText = 'Short Code: ' + (shortCode || '—');
+          noteText = 'Your Short Code will only be charged after we confirm your order by phone.';
+        } else if (paymentMethod === 'credit-card') {
+          methodText = 'Credit Card';
+          noteText = 'Your card details will be collected by phone when we confirm your order.';
+        }
+      } else if (locType === 'other') {
+        // Method line is hidden by data-show-when for non-UofM; only the note renders.
+        noteText = 'Your payment details will be collected by phone when we confirm your order.';
+      }
+      writeSummary('paymentMethod', methodText);
+      writeSummary('paymentNote', noteText);
     }
     // === Tip + Pricing ===
     var tipState = {
@@ -1140,6 +1169,9 @@
           uofmBuilding: readSummary('locationType') === 'uofm' ? readSummary('uofmBuilding') : '',
           uofmStreetAddress: readSummary('locationType') === 'uofm' ? readSummary('uofmStreetAddress') : '',
           shortCode: readSummary('locationType') === 'uofm' ? readSummary('shortCode') : '',
+          // Payment method only applies to UofM customers (radio is inside UofM block).
+          // Values: 'short-code' | 'credit-card' | '' (other location → handled by phone)
+          paymentMethod: readSummary('locationType') === 'uofm' ? readSummary('paymentMethod') : '',
           // Only include Other-location fields if locationType is 'other'
           streetAddress: readSummary('locationType') === 'other' ? readSummary('streetAddress') : '',
           suiteAddress: readSummary('locationType') === 'other' ? readSummary('suiteAddress') : '',
