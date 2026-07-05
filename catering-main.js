@@ -267,7 +267,13 @@
         timeStr = formatTimePoint(h24, mm);
         previewStr = 'Pickup time: ' + timeStr;
       }
-      composite.value = dateVal + ' ' + timeStr;
+      // Prepend day of week for readability in emails, Review, and backup log.
+      // Format: "Saturday, 07/11/2026 5:00-5:15 PM"
+      var dayOfWeek = '';
+      if (picker && picker.selectedDates && picker.selectedDates[0]) {
+        dayOfWeek = picker.selectedDates[0].toLocaleDateString('en-US', { weekday: 'long' });
+      }
+      composite.value = (dayOfWeek ? dayOfWeek + ', ' : '') + dateVal + ' ' + timeStr;
       if (displayEl) {
         displayEl.textContent = previewStr;
         displayEl.classList.add('is-window');
@@ -1183,9 +1189,14 @@
       flat: 0,
     };
     // Parse composite date (plain/window/cross-boundary). Returns START Date.
+    // Composite may optionally start with a weekday prefix (e.g., "Saturday, ")
+    // which is stripped before parsing the m/d/Y date part.
     function parseEventDateTime(dateStr) {
       if (!dateStr) return null;
-      var match = dateStr.trim().match(/^(\S+)\s+(.+)$/);
+      var trimmed = dateStr.trim();
+      // Strip optional "Weekday, " prefix — kept for display only.
+      trimmed = trimmed.replace(/^[A-Za-z]+,\s*/, '');
+      var match = trimmed.match(/^(\S+)\s+(.+)$/);
       if (!match) return null;
       var datePart = match[1];
       var timePart = match[2];
