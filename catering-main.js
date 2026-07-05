@@ -322,7 +322,14 @@
   (function () {
     window.__cateringToggleLoaded = true;
     var currentStep = 0;
-    var totalSteps = 4;
+    var totalSteps = 5;
+    // Visual progress bar has 4 segments (Contact, Event, Menu, Review).
+    // Internal step 3 (Supplies) maps to visual "Menu" — user still on Menu category.
+    var VISUAL_STEP_MAPPING = { 0: 0, 1: 1, 2: 2, 3: 2, 4: 3 };
+    var VISUAL_TOTAL_STEPS = 4;
+    function visualStepIndex(internalStep) {
+      return VISUAL_STEP_MAPPING[internalStep] != null ? VISUAL_STEP_MAPPING[internalStep] : 0;
+    }
     // --- Conditional toggle (Pickup/Delivery etc.) ---
     function applyToggle(groupName, value) {
       var selector = '[data-show-when^="' + groupName + ':"]';
@@ -386,15 +393,18 @@
       if (back) back.classList.toggle('is-hidden', stepIndex === 0);
       if (next) next.classList.toggle('is-hidden', stepIndex === totalSteps - 1);
       if (submit) submit.classList.toggle('is-hidden', stepIndex !== totalSteps - 1);
-      // Update progress bar
+      // Update progress bar — using visual step index, not internal
+      // Steps 2 (Menu items) and 3 (Supplies) both map to visual "Menu" segment,
+      // so progress bar doesn't move when Menu → Supplies transition happens.
       var baseStart = 5; // % filled on the very first step
-      var fillPercent = baseStart + (stepIndex / (totalSteps - 1)) * (100 - baseStart);
+      var visualIdx = visualStepIndex(stepIndex);
+      var fillPercent = baseStart + (visualIdx / (VISUAL_TOTAL_STEPS - 1)) * (100 - baseStart);
       var fill = document.querySelector('.progress-fill');
       if (fill) fill.style.width = fillPercent + '%';
       document.querySelectorAll('[data-step-label]').forEach(function (el) {
         var idx = Number(el.getAttribute('data-step-label'));
-        el.classList.toggle('is-active', idx === stepIndex);
-        el.classList.toggle('is-complete', idx < stepIndex);
+        el.classList.toggle('is-active', idx === visualIdx);
+        el.classList.toggle('is-complete', idx < visualIdx);
       });
       // Scroll to top of form (smooth)
       var formTop = document.querySelector('.progress-bar') || document.querySelector('form');
@@ -403,9 +413,14 @@
           behavior: 'smooth',
           block: 'start',
         });
-      // If entering Step 3, refresh the review
+      // If entering Step 3 (Supplies), update Cups block visibility based on cart state
       if (stepIndex === 3) {
-        renderStep3();
+        updateCupsBlockVisibility();
+      }
+      // If entering Step 4 (Review), render the review summaries
+      if (stepIndex === 4) {
+        updateCupsBlockVisibility();
+        renderStep4();
       }
     }
     function validateCurrentStep() {
@@ -808,6 +823,12 @@
       }
       syncCommentWrapper(card); // show/hide comment block based on qty
       renderCartBar();
+      // Keep Cups block visibility in sync with 2L presence — user might be
+      // on Step 2 adding/removing 2L drinks; when they later reach Step 3,
+      // the Cups block will already be in the correct state.
+      if (typeof updateCupsBlockVisibility === 'function') {
+        updateCupsBlockVisibility();
+      }
     }
     // Render the sticky cart bar
     function renderCartBar() {
@@ -990,12 +1011,99 @@
         container.appendChild(row);
       });
     }
-    function renderStep3() {
+    function renderStep4() {
       renderEventSummary();
       renderOrderItems();
       renderPricing();
       renderPaymentSummary();
+      renderSuppliesSummary();
     }
+    // === Supplies: helpers, visibility, and Step 4 review rendering ===
+    // Structure:
+    //   Step 3 (Supplies) — 4 mandatory Yes/No radios: Place Settings, Napkins,
+    //   Serving Utensils, Cups. Cups block is conditional on 2L drinks in cart.
+    //   State persists in DOM: even if Cups block hides after 2L removed,
+    //   the radio choice remains. On submit, cups only counted if 2L is present.
+    function has2LDrinksInCart() {
+      var slugs = Object.keys(cart.items);
+      for (var i = 0; i < slugs.length; i++) {
+        var item = cart.items[slugs[i]];
+        if (item.qty > 0 && item.choiceLabel) {
+          var label = item.choiceLabel.trim().toLowerCase();
+          if (label === '2l' || label === '2 l') {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    // Toggle .has-2l-cart class on Cups block wrapper and Cups review row.
+    // CSS hides them when .has-2l-cart is absent.
+    function updateCupsBlockVisibility() {
+      var show2L = has2LDrinksInCart();
+      document.querySelectorAll('[data-cups-block]').forEach(function (el) {
+        el.classList.toggle('has-2l-cart', show2L);
+      });
+      document.querySelectorAll('[data-cups-summary-row]').forEach(function (el) {
+        el.classList.toggle('has-2l-cart', show2L);
+      });
+    }
+    // Read a supply qty input value (Place Settings or Cups)
+    function getSupplyQty(key) {
+      var input = document.querySelector('[data-supply-qty="' + key + '"]');
+      if (!input) return 0;
+      return parseInt(input.value, 10) || 0;
+    }
+    // Total cost of paid supplies. Currently: Place Settings only ($0.40 × qty).
+    function getSuppliesTotal() {
+      var placeSettings = readSummary('placeSettings');
+      if (placeSettings === 'yes') {
+        return getSupplyQty('placeSettings') * 0.40;
+      }
+      return 0;
+    }
+    function formatSupplyYesNo(value) {
+      return value === 'yes' ? 'Yes' : value === 'no' ? 'No' : '—';
+    }
+    function formatSupplyChoiceWithQty(value, qtyKey) {
+      if (value === 'no') return 'No';
+      if (value !== 'yes') return '—';
+      var qty = getSupplyQty(qtyKey);
+      return 'Yes (' + qty + ')';
+    }
+    // Render Supplies section in Step 4 Review
+    function renderSuppliesSummary() {
+      writeSummary('placeSettingsDisplay', formatSupplyChoiceWithQty(readSummary('placeSettings'), 'placeSettings'));
+      writeSummary('napkinsDisplay', formatSupplyYesNo(readSummary('napkins')));
+      writeSummary('servingUtensilsDisplay', formatSupplyYesNo(readSummary('servingUtensils')));
+      // Cups row visibility is controlled by data-cups-summary-row .has-2l-cart via CSS
+      // Fill text only if 2L is in cart (avoid showing stale value)
+      if (has2LDrinksInCart()) {
+        writeSummary('cupsDisplay', formatSupplyChoiceWithQty(readSummary('cups'), 'cups'));
+      } else {
+        writeSummary('cupsDisplay', '—');
+      }
+    }
+    // Auto-fill supply qty when user selects Yes (default to guest count).
+    // Only prefills if qty is empty or 0 — respects user's prior manual entry.
+    document.addEventListener('change', function (e) {
+      var input = e.target;
+      if (!input || input.type !== 'radio') return;
+      var toggleGroup = input.getAttribute('data-toggle-group');
+      if (toggleGroup !== 'supply-place-settings' && toggleGroup !== 'supply-cups') return;
+      var toggleValue = input.getAttribute('data-toggle-value');
+      if (toggleValue !== 'yes') return;
+      var qtyKey = toggleGroup === 'supply-place-settings' ? 'placeSettings' : 'cups';
+      var qtyInput = document.querySelector('[data-supply-qty="' + qtyKey + '"]');
+      if (!qtyInput) return;
+      if (!qtyInput.value || qtyInput.value === '0') {
+        var guestCount = readSummary('guestCount');
+        if (guestCount) {
+          qtyInput.value = guestCount;
+          qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
     // === Step 3: Payment summary (at the bottom, under Estimated Total) ===
     // Two targets in DOM:
     //   [data-summary-target="paymentMethod"]  — method line ("Short Code: ..." | "Credit Card")
@@ -1089,22 +1197,27 @@
       Object.keys(cart.items).forEach(function (slug) {
         subtotal += cart.items[slug].lineTotal;
       });
+      var supplies = getSuppliesTotal();
+      // Tip is calculated on food subtotal only (not on supplies or delivery fee)
       var tip = calculateTip(subtotal);
       var deliveryFee = getDeliveryFee();
-      var total = subtotal + tip + deliveryFee;
+      var total = subtotal + supplies + tip + deliveryFee;
       var subEl = document.querySelector('[data-pricing-subtotal]');
       var tipEl = document.querySelector('[data-pricing-tip]');
       var delEl = document.querySelector('[data-pricing-delivery]');
       var totEl = document.querySelector('[data-pricing-total]');
+      var supEl = document.querySelector('[data-pricing-supplies]');
       if (subEl) subEl.textContent = '$' + subtotal.toFixed(2);
       if (tipEl) tipEl.textContent = '$' + tip.toFixed(2);
       if (delEl) delEl.textContent = '$' + deliveryFee.toFixed(2);
       if (totEl) totEl.textContent = '$' + total.toFixed(2);
+      if (supEl) supEl.textContent = '$' + supplies.toFixed(2);
       // Stash on cart for JSON serialization (round to 2 decimals to avoid
       // floating-point artifacts like 9.600000000000001 in the email).
       cart.subtotal = Math.round(subtotal * 100) / 100;
       cart.tip = Math.round(tip * 100) / 100;
       cart.deliveryFee = deliveryFee;
+      cart.supplies = Math.round(supplies * 100) / 100;
       cart.total = Math.round(total * 100) / 100;
     }
     // Tip option clicks
@@ -1203,8 +1316,28 @@
           tipFlat: tipState.mode === 'flat' ? tipState.flat : 0,
           tipAmount: cart.tip || 0,
           deliveryFee: cart.deliveryFee || 0,
+          suppliesTotal: cart.supplies || 0,
           total: cart.total || 0,
         },
+        supplies: (function () {
+          var placeSettingsYes = readSummary('placeSettings') === 'yes';
+          var cupsApplicable = has2LDrinksInCart();
+          var cupsYes = cupsApplicable && readSummary('cups') === 'yes';
+          return {
+            placeSettings: {
+              included: placeSettingsYes,
+              qty: placeSettingsYes ? getSupplyQty('placeSettings') : 0,
+              cost: placeSettingsYes ? getSupplyQty('placeSettings') * 0.40 : 0,
+            },
+            napkins: readSummary('napkins') === 'yes',
+            servingUtensils: readSummary('servingUtensils') === 'yes',
+            cups: {
+              applicable: cupsApplicable,
+              included: cupsYes,
+              qty: cupsYes ? getSupplyQty('cups') : 0,
+            },
+          };
+        })(),
         comments: readSummary('orderComments') || '',
       };
     }
