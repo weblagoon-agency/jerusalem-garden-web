@@ -1229,20 +1229,22 @@
       return 0;
     }
     function renderPricing() {
-      var subtotal = 0;
+      var foodSubtotal = 0;
       Object.keys(cart.items).forEach(function (slug) {
-        subtotal += cart.items[slug].lineTotal;
+        foodSubtotal += cart.items[slug].lineTotal;
       });
       var supplies = getSuppliesTotal();
-      // Tip is calculated on food subtotal only (not on supplies or delivery fee)
+      // Paid supplies (Place Settings) are part of the order — include them
+      // in subtotal so tip, total, and displayed subtotal all match up.
+      var subtotal = foodSubtotal + supplies;
       var tip = calculateTip(subtotal);
       var deliveryFee = getDeliveryFee();
-      var total = subtotal + supplies + tip + deliveryFee;
+      var total = subtotal + tip + deliveryFee;
       var subEl = document.querySelector('[data-pricing-subtotal]');
       var tipEl = document.querySelector('[data-pricing-tip]');
       var delEl = document.querySelector('[data-pricing-delivery]');
       var totEl = document.querySelector('[data-pricing-total]');
-      var supEl = document.querySelector('[data-pricing-supplies]');
+      var supEl = document.querySelector('[data-pricing-supplies]'); // optional line
       if (subEl) subEl.textContent = '$' + subtotal.toFixed(2);
       if (tipEl) tipEl.textContent = '$' + tip.toFixed(2);
       if (delEl) delEl.textContent = '$' + deliveryFee.toFixed(2);
@@ -1250,6 +1252,7 @@
       if (supEl) supEl.textContent = '$' + supplies.toFixed(2);
       // Stash on cart for JSON serialization (round to 2 decimals to avoid
       // floating-point artifacts like 9.600000000000001 in the email).
+      cart.foodSubtotal = Math.round(foodSubtotal * 100) / 100;
       cart.subtotal = Math.round(subtotal * 100) / 100;
       cart.tip = Math.round(tip * 100) / 100;
       cart.deliveryFee = deliveryFee;
@@ -1346,13 +1349,14 @@
           };
         }),
         pricing: {
-          subtotal: cart.subtotal || 0,
+          foodSubtotal: cart.foodSubtotal || 0,   // food items only
+          suppliesTotal: cart.supplies || 0,       // paid supplies (Place Settings)
+          subtotal: cart.subtotal || 0,            // foodSubtotal + suppliesTotal
           tipMode: tipState.mode,
           tipPercent: tipState.mode === 'percent' ? tipState.percent : 0,
           tipFlat: tipState.mode === 'flat' ? tipState.flat : 0,
           tipAmount: cart.tip || 0,
           deliveryFee: cart.deliveryFee || 0,
-          suppliesTotal: cart.supplies || 0,
           total: cart.total || 0,
         },
         supplies: (function () {
