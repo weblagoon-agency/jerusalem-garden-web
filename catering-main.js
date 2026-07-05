@@ -346,9 +346,15 @@
       syncRequiredAttributes();
     }
     // Mark fields inside conditional blocks with their original required state.
-    // Runs once on page load.
+    // Runs once on page load. Tracks two conditional block mechanisms:
+    //   1. [data-show-when] — generic radio-driven conditional (payment method, address, etc.)
+    //   2. [data-cups-block] — Cups block hidden when no 2L drinks in cart
     function initRequiredTracking() {
-      var fields = document.querySelectorAll('[data-show-when] input, [data-show-when] select, [data-show-when] textarea');
+      var selectors = [
+        '[data-show-when] input',   '[data-show-when] select',   '[data-show-when] textarea',
+        '[data-cups-block] input',  '[data-cups-block] select',  '[data-cups-block] textarea'
+      ].join(', ');
+      var fields = document.querySelectorAll(selectors);
       fields.forEach(function (field) {
         if (!field.hasAttribute('data-original-required')) {
           var wasRequired = field.hasAttribute('required') ? 'true' : 'false';
