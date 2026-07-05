@@ -1420,15 +1420,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // Short Code mask: digits only, no max length.
-  // Prevents the user from typing letters/symbols even before HTML5 validation.
+  // Short Code mask: exactly 6 digits.
+  // IMask restricts typing to digits only + max 6 characters. HTML5 pattern="\d{6}"
+  // set on the input in Designer enforces MINIMUM 6 (blocks submit with fewer digits).
   document.querySelectorAll('input[data-summary="shortCode"]').forEach(function (el) {
     IMask(el, {
-      mask: Number,
-      scale: 0,             // no decimals
-      signed: false,        // no negative sign
-      thousandsSeparator: '', // no thousand separators
-      normalizeZeros: false // keep leading zeros if the user types them
+      mask: '000000'
     });
   });
 });
