@@ -768,15 +768,10 @@
     function readCardState(card) {
       var slug = card.getAttribute('data-item-slug');
       var name = card.getAttribute('data-item-name');
-      // Quantity: either from qty input, or from yes/no toggle
+      // Quantity from qty input. (Legacy Yes/No toggle for napkins/utensils
+      // removed — Supplies moved to dedicated Step 3.)
       var qtyInput = card.querySelector('[data-qty-input]');
-      var toggleInput = card.querySelector('[data-qty-toggle-input]');
-      var qty = 0;
-      if (qtyInput) {
-        qty = parseInt(qtyInput.value, 10) || 0;
-      } else if (toggleInput) {
-        qty = toggleInput.checked ? 1 : 0;
-      }
+      var qty = qtyInput ? (parseInt(qtyInput.value, 10) || 0) : 0;
       // Price: from selected choice, or base price
       var selectedChoice = card.querySelector('.choice-option.is-selected');
       var pricePerUnit = 0;
@@ -857,9 +852,9 @@
       var card = e.target.closest('[data-item-slug]') || e.target;
       if (card) updateCartFromCard(card);
     });
-    // Special option checkbox or Yes/No toggle
+    // Special option checkbox change → refresh cart
     document.addEventListener('change', function (e) {
-      if (e.target.matches('[data-special-input]') || e.target.matches('[data-qty-toggle-input]')) {
+      if (e.target.matches('[data-special-input]')) {
         var card = e.target.closest('[data-item-slug]');
         if (card) updateCartFromCard(card);
       }
@@ -875,9 +870,6 @@
       // Reset DOM controls (only inside menu accordion, not other inputs)
       document.querySelectorAll('[data-style-section] [data-qty-input]').forEach(function (input) {
         input.value = '';
-      });
-      document.querySelectorAll('[data-style-section] [data-qty-toggle-input]:checked').forEach(function (cb) {
-        cb.checked = false;
       });
       document.querySelectorAll('[data-style-section] [data-special-input]:checked').forEach(function (cb) {
         cb.checked = false;
@@ -1084,6 +1076,24 @@
         writeSummary('cupsDisplay', '—');
       }
     }
+    // === Supplies qty auto-fill + guest count re-sync ===
+    // Track user's manual qty changes so we don't overwrite them on guest count updates.
+    // Programmatic changes (auto-fill / re-sync) are wrapped in a suppression flag.
+    var suppressSupplyTouched = false;
+    document.addEventListener('input', function (e) {
+      var input = e.target;
+      if (!input || !input.getAttribute) return;
+      if (!input.getAttribute('data-supply-qty')) return;
+      if (suppressSupplyTouched) return;
+      input.setAttribute('data-supply-qty-touched', 'true');
+    });
+    function setSupplyQty(qtyInput, value) {
+      if (!qtyInput) return;
+      suppressSupplyTouched = true;
+      qtyInput.value = value;
+      qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+      suppressSupplyTouched = false;
+    }
     // Auto-fill supply qty when user selects Yes (default to guest count).
     // Only prefills if qty is empty or 0 — respects user's prior manual entry.
     document.addEventListener('change', function (e) {
@@ -1099,9 +1109,35 @@
       if (!qtyInput.value || qtyInput.value === '0') {
         var guestCount = readSummary('guestCount');
         if (guestCount) {
-          qtyInput.value = guestCount;
-          qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+          setSupplyQty(qtyInput, guestCount);
         }
+      }
+    });
+    // Guest count change → re-sync auto-filled supplies qty (untouched only).
+    // If the user manually adjusted a supply qty, it stays as-is.
+    document.addEventListener('input', function (e) {
+      var input = e.target;
+      if (!input || !input.getAttribute) return;
+      if (input.getAttribute('data-summary') !== 'guestCount') return;
+      var guestCount = parseInt(input.value, 10);
+      if (!guestCount || guestCount < 1) return;
+      document.querySelectorAll('[data-supply-qty]').forEach(function (qtyInput) {
+        if (qtyInput.getAttribute('data-supply-qty-touched') === 'true') return;
+        var key = qtyInput.getAttribute('data-supply-qty');
+        var choice = readSummary(key);
+        if (choice !== 'yes') return;
+        setSupplyQty(qtyInput, guestCount);
+      });
+    });
+    // === Review "Edit" links — jump to a specific step ===
+    // Any element with data-step-jump="N" navigates to internal step N when clicked.
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-step-jump]');
+      if (!btn) return;
+      e.preventDefault();
+      var target = parseInt(btn.getAttribute('data-step-jump'), 10);
+      if (!isNaN(target)) {
+        goToStep(target);
       }
     });
     // === Step 3: Payment summary (at the bottom, under Estimated Total) ===
