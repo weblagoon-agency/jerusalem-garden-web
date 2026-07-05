@@ -785,6 +785,11 @@
     function readCardState(card) {
       var slug = card.getAttribute('data-item-slug');
       var name = card.getAttribute('data-item-name');
+      // Kitchen prep order metadata (client fix #4): grouping for the printed
+      // restaurant order. Empty printCategory falls to the bottom of the list.
+      var printCategory = card.getAttribute('data-print-category') || '';
+      var sortOrder = parseInt(card.getAttribute('data-sort-order'), 10);
+      if (isNaN(sortOrder)) sortOrder = 999;
       // Quantity from qty input. (Legacy Yes/No toggle for napkins/utensils
       // removed — Supplies moved to dedicated Step 3.)
       var qtyInput = card.querySelector('[data-qty-input]');
@@ -814,6 +819,8 @@
       return {
         slug: slug,
         name: name,
+        printCategory: printCategory,
+        sortOrder: sortOrder,
         qty: qty,
         pricePerUnit: pricePerUnit,
         choiceLabel: choiceLabel,
@@ -971,11 +978,34 @@
         review.classList.toggle('is-delivery', deliveryType === 'delivery');
       }
     }
+    // Kitchen prep order for the restaurant print/email (client fix #4).
+    // Items are grouped by this order in both the Review table and the
+    // submission JSON, so restaurant staff can pack orders in a consistent
+    // sequence regardless of how the customer added items to the cart.
+    // Within each group, items sort by their CMS Sort Order (ascending).
+    var PRINT_CATEGORY_ORDER = {
+      'sandwiches':    1,
+      'cold-sides':    2,
+      'sides-of-meat': 3,
+      'other-sides':   4,
+      'desserts':      5,
+      'drinks':        6
+    };
+    function getSortedCartSlugs() {
+      return Object.keys(cart.items).sort(function (a, b) {
+        var itA = cart.items[a];
+        var itB = cart.items[b];
+        var pa = PRINT_CATEGORY_ORDER[itA.printCategory] || 99;
+        var pb = PRINT_CATEGORY_ORDER[itB.printCategory] || 99;
+        if (pa !== pb) return pa - pb;
+        return (itA.sortOrder || 999) - (itB.sortOrder || 999);
+      });
+    }
     function renderOrderItems() {
       var container = document.querySelector('[data-order-items]');
       if (!container) return;
       container.innerHTML = '';
-      var slugs = Object.keys(cart.items);
+      var slugs = getSortedCartSlugs();
       if (slugs.length === 0) {
         var empty = document.createElement('div');
         empty.className = 'order-empty-state';
@@ -1368,7 +1398,10 @@
           deliveryContactPhone: readSummary('deliveryContactPhone'),
           deliveryInstructions: readSummary('deliveryInstructions'),
         },
-        items: Object.keys(cart.items).map(function (slug) {
+        // Items are pre-sorted by kitchen prep order (client fix #4):
+        // Sandwiches → Cold Sides → Sides of Meat → Other Sides → Desserts → Drinks.
+        // Within each group, items follow their CMS Sort Order.
+        items: getSortedCartSlugs().map(function (slug) {
           var it = cart.items[slug];
           return {
             slug: it.slug,
