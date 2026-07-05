@@ -946,10 +946,12 @@
       if (dcPhone) contactStr += ', ' + dcPhone;
       writeSummary('deliveryContact', contactStr);
       writeSummary('deliveryInstructions', readSummary('deliveryInstructions'));
-      // Toggle delivery-specific rows on Step 3
-      var step3 = document.querySelector('[data-step="3"]');
-      if (step3) {
-        step3.classList.toggle('is-delivery', deliveryType === 'delivery');
+      // Toggle delivery-specific rows on Step 4 Review (formerly Step 3).
+      // .is-delivery class controls visibility of Delivery Fee row, Delivery
+      // Contact section, and any other delivery-only elements in Review.
+      var review = document.querySelector('[data-step="4"]');
+      if (review) {
+        review.classList.toggle('is-delivery', deliveryType === 'delivery');
       }
     }
     function renderOrderItems() {
@@ -1061,6 +1063,12 @@
       if (value === 'no') return 'No';
       if (value !== 'yes') return '—';
       var qty = getSupplyQty(qtyKey);
+      // Place Settings are paid ($0.40 each) — show cost breakdown.
+      // Cups are free — just show qty.
+      if (qtyKey === 'placeSettings') {
+        var cost = qty * 0.40;
+        return 'Yes (' + qty + ' × $0.40 = $' + cost.toFixed(2) + ')';
+      }
       return 'Yes (' + qty + ')';
     }
     // Render Supplies section in Step 4 Review
