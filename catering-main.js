@@ -357,11 +357,14 @@
       });
     }
     // Add or remove `required` attribute based on whether the field's
-    // conditional ancestor is currently visible.
+    // conditional ancestor is currently visible. Handles two hiding mechanisms:
+    //   1. [data-show-when]:not(.is-visible) — generic radio-driven conditional
+    //   2. [data-cups-block]:not(.has-2l-cart) — Cups block hidden when no 2L in cart
     function syncRequiredAttributes() {
       var fields = document.querySelectorAll('[data-original-required="true"]');
       fields.forEach(function (field) {
-        var hiddenParent = field.closest('[data-show-when]:not(.is-visible)');
+        var hiddenParent = field.closest('[data-show-when]:not(.is-visible)')
+          || field.closest('[data-cups-block]:not(.has-2l-cart)');
         if (hiddenParent) {
           field.removeAttribute('required');
         } else {
@@ -435,8 +438,10 @@
       var fields = stepEl.querySelectorAll('input[required], select[required], textarea[required]');
       for (var i = 0; i < fields.length; i++) {
         var field = fields[i];
-        // Skip required fields inside hidden conditional blocks
-        var hiddenParent = field.closest('[data-show-when]:not(.is-visible)');
+        // Skip required fields inside hidden conditional blocks.
+        // Two hiding mechanisms handled: generic data-show-when + Cups block (no 2L in cart).
+        var hiddenParent = field.closest('[data-show-when]:not(.is-visible)')
+          || field.closest('[data-cups-block]:not(.has-2l-cart)');
         if (hiddenParent) continue;
         // Special case: readonly inputs (e.g. Flatpickr) are excluded from native
         // constraint validation, so we check value manually
@@ -1047,6 +1052,10 @@
       document.querySelectorAll('[data-cups-summary-row]').forEach(function (el) {
         el.classList.toggle('has-2l-cart', show2L);
       });
+      // Cups radios become NOT required when block is hidden (no 2L in cart)
+      if (typeof syncRequiredAttributes === 'function') {
+        syncRequiredAttributes();
+      }
     }
     // Read a supply qty input value (Place Settings or Cups)
     function getSupplyQty(key) {
